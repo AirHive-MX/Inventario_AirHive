@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import Header from '@/components/Header';
 import InventoryTable from '@/components/InventoryTable';
-import PieceModal from '@/components/PieceModal';
-import PieceDetailModal from '@/components/PieceDetailModal';
+import ItemModal from '@/components/ItemModal';
+import ItemDetailModal from '@/components/ItemDetailModal';
 import Popup from '@/components/Popup';
 
 export default function Home() {
@@ -13,7 +13,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
 
   // Modal states
   const [showForm, setShowForm] = useState(false);
@@ -30,10 +29,20 @@ export default function Home() {
     setPopup({ message, type });
   };
 
-  // Fetch all pieces
+  // Log activity
+  const logActivity = async (itemId, itemName, action, details) => {
+    await supabase.from('inventario_airhive_activity_log').insert([{
+      item_id: itemId,
+      item_name: itemName,
+      action,
+      details,
+    }]);
+  };
+
+  // Fetch all items
   const fetchPieces = useCallback(async () => {
     const { data, error } = await supabase
-      .from('art_pieces')
+      .from('inventario_airhive_items')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -51,10 +60,10 @@ export default function Home() {
   }, [fetchPieces]);
 
   // Upload photo to Supabase Storage
-  const uploadPhoto = async (blob, code) => {
-    const fileName = `${code.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.jpg`;
+  const uploadPhoto = async (blob, name) => {
+    const fileName = `${name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.jpg`;
     const { data, error } = await supabase.storage
-      .from('art-photos')
+      .from('inventario-airhive-photos')
       .upload(fileName, blob, { contentType: 'image/jpeg' });
 
     if (error) {
@@ -63,13 +72,13 @@ export default function Home() {
     }
 
     const { data: urlData } = supabase.storage
-      .from('art-photos')
+      .from('inventario-airhive-photos')
       .getPublicUrl(data.path);
 
     return urlData.publicUrl;
   };
 
-  // Add or update piece
+  // Add or update item
   const handleSave = async (formData, photoBlob) => {
     setSaving(true);
 
@@ -77,30 +86,60 @@ export default function Home() {
       let photoUrl = selectedPiece?.photo_url || null;
 
       if (photoBlob) {
-        const url = await uploadPhoto(photoBlob, formData.code);
+        const url = await uploadPhoto(photoBlob, formData.name);
         if (url) photoUrl = url;
       }
 
-      const pieceData = {
+      const itemData = {
         ...formData,
         photo_url: photoUrl,
       };
 
       if (selectedPiece) {
         const { error } = await supabase
-          .from('art_pieces')
-          .update(pieceData)
+          .from('inventario_airhive_items')
+          .update(itemData)
           .eq('id', selectedPiece.id);
 
         if (error) throw error;
-        showPopup('Pieza actualizada correctamente', 'success');
+
+        // Build change details
+        const changes = [];
+        if (selectedPiece.name !== itemData.name) changes.push(`Nombre: "${selectedPiece.name}" → "${itemData.name}"`);
+        if (selectedPiece.type !== itemData.type) changes.push(`Tipo: "${selectedPiece.type}" → "${itemData.type}"`);
+        if (selectedPiece.quantity !== itemData.quantity) changes.push(`Cantidad: ${selectedPiece.quantity} → ${itemData.quantity}`);
+        if (selectedPiece.in_use !== itemData.in_use) changes.push(`En uso: ${selectedPiece.in_use} → ${itemData.in_use}`);
+        if (selectedPiece.location !== itemData.location) changes.push(`Ubicación: "${selectedPiece.location || ''}" → "${itemData.location || ''}"`);
+        if (selectedPiece.supplier !== itemData.supplier) changes.push(`Proveedor: "${selectedPiece.supplier || ''}" → "${itemData.supplier || ''}"`);
+        if (selectedPiece.part_number !== itemData.part_number) changes.push(`Número de parte: "${selectedPiece.part_number || ''}" → "${itemData.part_number || ''}"`);
+        if (photoBlob) changes.push('Foto actualizada');
+
+        await logActivity(
+          selectedPiece.id,
+          itemData.name || selectedPiece.name,
+          'editado',
+          changes.length > 0 ? changes.join('; ') : 'Artículo editado'
+        );
+
+        showPopup('Artículo actualizado correctamente', 'success');
       } else {
-        const { error } = await supabase
-          .from('art_pieces')
-          .insert([pieceData]);
+        const { data: inserted, error } = await supabase
+          .from('inventario_airhive_items')
+          .insert([itemData])
+          .select();
 
         if (error) throw error;
-        showPopup('Pieza agregada correctamente', 'success');
+
+        if (inserted && inserted[0]) {
+          await logActivity(
+            inserted[0].id,
+            itemData.name,
+            'creado',
+            `Artículo creado: ${itemData.name} (${itemData.type}) — Cantidad: ${itemData.quantity || 0}`
+          );
+        }
+
+        showPopup('Artículo agregado correctamente', 'success');
       }
 
       setShowForm(false);
@@ -108,13 +147,40 @@ export default function Home() {
       await fetchPieces();
     } catch (error) {
       console.error('Save error:', error);
-      if (error.code === '23505') {
-        showPopup('Ya existe una pieza con ese código', 'error');
-      } else {
-        showPopup('Error al guardar la pieza', 'error');
-      }
+      showPopup('Error al guardar el artículo', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Update usage (+/- buttons)
+  const handleUpdateUsage = async (piece, delta) => {
+    const newInUse = Math.max(0, Math.min(piece.quantity, (piece.in_use || 0) + delta));
+    if (newInUse === piece.in_use) return;
+
+    const { error } = await supabase
+      .from('inventario_airhive_items')
+      .update({ in_use: newInUse })
+      .eq('id', piece.id);
+
+    if (error) {
+      showPopup('Error al actualizar uso', 'error');
+      return;
+    }
+
+    const action = delta > 0 ? 'en uso' : 'liberado';
+    await logActivity(
+      piece.id,
+      piece.name,
+      'uso_actualizado',
+      `${piece.name}: ${piece.in_use || 0} → ${newInUse} en uso (${delta > 0 ? '+1 marcado en uso' : '1 liberado'})`
+    );
+
+    await fetchPieces();
+
+    // Refresh selectedPiece if detail modal is open
+    if (showDetail && selectedPiece?.id === piece.id) {
+      setSelectedPiece((prev) => prev ? { ...prev, in_use: newInUse } : prev);
     }
   };
 
@@ -131,26 +197,33 @@ export default function Home() {
 
     try {
       if (piece.photo_url) {
-        const path = piece.photo_url.split('/art-photos/')[1];
+        const path = piece.photo_url.split('/inventario-airhive-photos/')[1];
         if (path) {
-          await supabase.storage.from('art-photos').remove([path]);
+          await supabase.storage.from('inventario-airhive-photos').remove([path]);
         }
       }
 
+      await logActivity(
+        piece.id,
+        piece.name,
+        'eliminado',
+        `Artículo eliminado: ${piece.name} (${piece.type}) — Tenía ${piece.quantity || 0} unidades`
+      );
+
       const { error } = await supabase
-        .from('art_pieces')
+        .from('inventario_airhive_items')
         .delete()
         .eq('id', piece.id);
 
       if (error) throw error;
 
-      showPopup('Pieza eliminada correctamente', 'success');
+      showPopup('Artículo eliminado correctamente', 'success');
       setShowDetail(false);
       setSelectedPiece(null);
       await fetchPieces();
     } catch (error) {
       console.error('Delete error:', error);
-      showPopup('Error al eliminar la pieza', 'error');
+      showPopup('Error al eliminar el artículo', 'error');
     } finally {
       setDeleting(false);
     }
@@ -175,26 +248,22 @@ export default function Home() {
   const filteredPieces = pieces.filter((p) => {
     const matchesSearch =
       !search ||
-      p.code.toLowerCase().includes(search.toLowerCase()) ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       (p.type && p.type.toLowerCase().includes(search.toLowerCase())) ||
-      (p.artist && p.artist.toLowerCase().includes(search.toLowerCase())) ||
-      (p.civilization && p.civilization.toLowerCase().includes(search.toLowerCase()));
+      (p.location && p.location.toLowerCase().includes(search.toLowerCase())) ||
+      (p.part_number && p.part_number.toLowerCase().includes(search.toLowerCase())) ||
+      (p.supplier && p.supplier.toLowerCase().includes(search.toLowerCase()));
 
     const matchesType = !filterType || p.type === filterType;
-    const matchesStatus = !filterStatus || p.status === filterStatus;
 
-    return matchesSearch && matchesType && matchesStatus;
+    return matchesSearch && matchesType;
   });
 
   const uniqueTypes = [...new Set(pieces.map((p) => p.type).filter(Boolean))].sort();
 
-  const countByStatus = {
-    total: pieces.length,
-    inventario: pieces.filter((p) => p.status === 'inventario').length,
-    prestado: pieces.filter((p) => p.status === 'prestado').length,
-    vendido: pieces.filter((p) => p.status === 'vendido').length,
-  };
+  const totalUnits = pieces.reduce((sum, p) => sum + (p.quantity || 0), 0);
+  const totalInUse = pieces.reduce((sum, p) => sum + (p.in_use || 0), 0);
+  const totalAvailable = totalUnits - totalInUse;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50/80 dark:from-[#0d1424] dark:to-[#0b1020] transition-colors duration-300">
@@ -204,20 +273,20 @@ export default function Home() {
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
           <div className="bg-white dark:bg-[#1a2236] rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-ah-gray/50 dark:border-[#2a3650] shadow-sm transition-colors duration-300">
-            <p className="text-xs sm:text-sm font-medium text-ah-charcoal/50 dark:text-[#a0b4d0] uppercase tracking-wide">Total</p>
-            <p className="text-2xl sm:text-4xl font-bold text-ah-navy dark:text-[#edf3ff] mt-1">{countByStatus.total}</p>
+            <p className="text-xs sm:text-sm font-medium text-ah-charcoal/50 dark:text-[#a0b4d0] uppercase tracking-wide">Artículos</p>
+            <p className="text-2xl sm:text-4xl font-bold text-ah-navy dark:text-[#edf3ff] mt-1">{pieces.length}</p>
+          </div>
+          <div className="bg-white dark:bg-[#1a2236] rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-ah-gray/50 dark:border-[#2a3650] shadow-sm transition-colors duration-300">
+            <p className="text-xs sm:text-sm font-medium text-ah-charcoal/50 dark:text-[#a0b4d0] uppercase tracking-wide">Unidades</p>
+            <p className="text-2xl sm:text-4xl font-bold text-ah-navy dark:text-[#edf3ff] mt-1">{totalUnits}</p>
           </div>
           <div className="bg-white dark:bg-[#1a2236] rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-green-100 dark:border-green-900/40 shadow-sm transition-colors duration-300">
-            <p className="text-xs sm:text-sm font-medium text-green-600 dark:text-green-400 uppercase tracking-wide">En Inventario</p>
-            <p className="text-2xl sm:text-4xl font-bold text-green-700 dark:text-green-300 mt-1">{countByStatus.inventario}</p>
+            <p className="text-xs sm:text-sm font-medium text-green-600 dark:text-green-400 uppercase tracking-wide">Disponibles</p>
+            <p className="text-2xl sm:text-4xl font-bold text-green-700 dark:text-green-300 mt-1">{totalAvailable}</p>
           </div>
-          <div className="bg-white dark:bg-[#1a2236] rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-yellow-100 dark:border-yellow-900/40 shadow-sm transition-colors duration-300">
-            <p className="text-xs sm:text-sm font-medium text-yellow-600 dark:text-yellow-400 uppercase tracking-wide">Prestados</p>
-            <p className="text-2xl sm:text-4xl font-bold text-yellow-700 dark:text-yellow-300 mt-1">{countByStatus.prestado}</p>
-          </div>
-          <div className="bg-white dark:bg-[#1a2236] rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-red-100 dark:border-red-900/40 shadow-sm transition-colors duration-300">
-            <p className="text-xs sm:text-sm font-medium text-red-600 dark:text-red-400 uppercase tracking-wide">Vendidos</p>
-            <p className="text-2xl sm:text-4xl font-bold text-red-700 dark:text-red-300 mt-1">{countByStatus.vendido}</p>
+          <div className="bg-white dark:bg-[#1a2236] rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-orange-100 dark:border-orange-900/40 shadow-sm transition-colors duration-300">
+            <p className="text-xs sm:text-sm font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wide">En Uso</p>
+            <p className="text-2xl sm:text-4xl font-bold text-orange-700 dark:text-orange-300 mt-1">{totalInUse}</p>
           </div>
         </div>
 
@@ -228,7 +297,7 @@ export default function Home() {
             className="btn-primary w-full sm:w-auto px-8 py-4 text-xl font-semibold rounded-full text-white flex items-center justify-center gap-3"
           >
             <span className="text-2xl">+</span>
-            Agregar Pieza
+            Agregar Artículo
           </button>
 
           <div className="flex-1 flex flex-col sm:flex-row gap-3">
@@ -238,7 +307,7 @@ export default function Home() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por código, nombre..."
+                placeholder="Buscar por nombre, tipo, ubicación..."
                 className="w-full h-14 pl-12 pr-4 text-lg rounded-full border-2 border-ah-gray dark:border-[#2a3650] bg-white dark:bg-[#1a2236] text-ah-charcoal dark:text-[#edf3ff] placeholder-gray-400 dark:placeholder-[#5a6e8a] transition-colors duration-300"
               />
               {search && (
@@ -251,35 +320,22 @@ export default function Home() {
               )}
             </div>
 
-            <div className="flex gap-3">
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="h-14 px-4 text-base rounded-full border-2 border-ah-gray dark:border-[#2a3650] bg-white dark:bg-[#1a2236] text-ah-charcoal dark:text-[#edf3ff] flex-1 sm:flex-none sm:min-w-[160px] transition-colors duration-300"
-              >
-                <option value="">Todos los tipos</option>
-                {uniqueTypes.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="h-14 px-4 text-base rounded-full border-2 border-ah-gray dark:border-[#2a3650] bg-white dark:bg-[#1a2236] text-ah-charcoal dark:text-[#edf3ff] flex-1 sm:flex-none sm:min-w-[160px] transition-colors duration-300"
-              >
-                <option value="">Todos los estados</option>
-                <option value="inventario">En Inventario</option>
-                <option value="prestado">Prestado</option>
-                <option value="vendido">Vendido</option>
-              </select>
-            </div>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="h-14 px-4 text-base rounded-full border-2 border-ah-gray dark:border-[#2a3650] bg-white dark:bg-[#1a2236] text-ah-charcoal dark:text-[#edf3ff] sm:min-w-[200px] transition-colors duration-300"
+            >
+              <option value="">Todos los tipos</option>
+              {uniqueTypes.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {search || filterType || filterStatus ? (
+        {search || filterType ? (
           <p className="text-base text-ah-charcoal/50 dark:text-[#a0b4d0] mb-4">
-            Mostrando {filteredPieces.length} de {pieces.length} piezas
+            Mostrando {filteredPieces.length} de {pieces.length} artículos
             {search && <span> — búsqueda: &quot;{search}&quot;</span>}
           </p>
         ) : null}
@@ -288,11 +344,12 @@ export default function Home() {
           pieces={filteredPieces}
           loading={loading}
           onPieceClick={handlePieceClick}
+          onUpdateUsage={handleUpdateUsage}
         />
       </main>
 
       {showForm && (
-        <PieceModal
+        <ItemModal
           piece={selectedPiece}
           onSave={handleSave}
           onClose={() => {
@@ -304,10 +361,11 @@ export default function Home() {
       )}
 
       {showDetail && selectedPiece && (
-        <PieceDetailModal
+        <ItemDetailModal
           piece={selectedPiece}
           onEdit={handleEditFromDetail}
           onDelete={handleDelete}
+          onUpdateUsage={handleUpdateUsage}
           onClose={() => {
             setShowDetail(false);
             setSelectedPiece(null);
@@ -320,8 +378,8 @@ export default function Home() {
       {confirmDelete && (
         <Popup
           type="confirm"
-          title="Eliminar pieza"
-          message={`¿Está seguro de que desea eliminar "${confirmDelete.name}" (${confirmDelete.code})? Esta acción no se puede deshacer.`}
+          title="Eliminar artículo"
+          message={`¿Está seguro de que desea eliminar "${confirmDelete.name}"? Esta acción no se puede deshacer.`}
           onConfirm={executeDelete}
           onClose={() => setConfirmDelete(null)}
         />

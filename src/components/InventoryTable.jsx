@@ -2,32 +2,8 @@
 
 import { useState } from 'react';
 
-const STATUS_LABELS = {
-  inventario: 'En Inventario',
-  prestado: 'Prestado',
-  vendido: 'Vendido',
-};
-
-function StatusBadge({ status }) {
-  return (
-    <span className={`badge-${status} px-3 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap`}>
-      {STATUS_LABELS[status] || status}
-    </span>
-  );
-}
-
-function formatCurrency(value) {
-  if (!value && value !== 0) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-export default function InventoryTable({ pieces, loading, onPieceClick }) {
-  const [sortColumn, setSortColumn] = useState('code');
+export default function InventoryTable({ pieces, loading, onPieceClick, onUpdateUsage }) {
+  const [sortColumn, setSortColumn] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
 
   const handleSort = (column) => {
@@ -43,9 +19,14 @@ export default function InventoryTable({ pieces, loading, onPieceClick }) {
     let aVal = a[sortColumn];
     let bVal = b[sortColumn];
 
-    if (sortColumn === 'estimated_value_usd') {
-      aVal = Number(aVal) || 0;
-      bVal = Number(bVal) || 0;
+    if (sortColumn === 'quantity' || sortColumn === 'available') {
+      if (sortColumn === 'available') {
+        aVal = (a.quantity || 0) - (a.in_use || 0);
+        bVal = (b.quantity || 0) - (b.in_use || 0);
+      } else {
+        aVal = Number(aVal) || 0;
+        bVal = Number(bVal) || 0;
+      }
       return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
     }
 
@@ -77,10 +58,10 @@ export default function InventoryTable({ pieces, loading, onPieceClick }) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
-          <div className="text-6xl mb-4">🏛️</div>
-          <p className="text-2xl font-semibold text-ah-navy dark:text-[#edf3ff] mb-2">No hay piezas registradas</p>
+          <div className="text-6xl mb-4">📦</div>
+          <p className="text-2xl font-semibold text-ah-navy dark:text-[#edf3ff] mb-2">No hay artículos registrados</p>
           <p className="text-lg text-ah-charcoal/50 dark:text-[#a0b4d0]">
-            Presione &quot;Agregar Pieza&quot; para comenzar
+            Presione &quot;Agregar Artículo&quot; para comenzar
           </p>
         </div>
       </div>
@@ -94,10 +75,10 @@ export default function InventoryTable({ pieces, loading, onPieceClick }) {
         {/* Mobile sort controls */}
         <div className="flex gap-2 overflow-x-auto pb-2">
           {[
-            { col: 'code', label: 'Código' },
             { col: 'name', label: 'Nombre' },
             { col: 'type', label: 'Tipo' },
-            { col: 'status', label: 'Estado' },
+            { col: 'quantity', label: 'Cantidad' },
+            { col: 'available', label: 'Disponible' },
           ].map(({ col, label }) => (
             <button
               key={col}
@@ -115,49 +96,72 @@ export default function InventoryTable({ pieces, loading, onPieceClick }) {
         </div>
 
         {/* Cards */}
-        {sorted.map((piece) => (
-          <div
-            key={piece.id}
-            onClick={() => onPieceClick(piece)}
-            className="bg-white dark:bg-[#1a2236] rounded-2xl border border-ah-gray/50 dark:border-[#2a3650] shadow-sm p-4 active:scale-[0.98] transition-all cursor-pointer"
-          >
-            <div className="flex gap-4">
-              {/* Photo */}
-              {piece.photo_url ? (
-                <img
-                  src={piece.photo_url}
-                  alt={piece.name}
-                  className="w-20 h-20 object-cover rounded-xl border border-ah-gray/50 dark:border-[#2a3650] flex-shrink-0"
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-xl bg-gray-100 dark:bg-[#0f1a2e] border border-ah-gray/50 dark:border-[#2a3650] flex items-center justify-center text-3xl flex-shrink-0">
-                  🖼️
-                </div>
-              )}
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-lg font-bold text-ah-navy dark:text-[#edf3ff] truncate">{piece.name}</p>
-                    <p className="text-base font-semibold text-ah-blue dark:text-[#7db0ff]">{piece.code}</p>
+        {sorted.map((piece) => {
+          const avail = Math.max(0, (piece.quantity || 0) - (piece.in_use || 0));
+          const total = piece.quantity || 0;
+          return (
+            <div
+              key={piece.id}
+              onClick={() => onPieceClick(piece)}
+              className="bg-white dark:bg-[#1a2236] rounded-2xl border border-ah-gray/50 dark:border-[#2a3650] shadow-sm p-4 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <div className="flex gap-4">
+                {/* Photo */}
+                {piece.photo_url ? (
+                  <img
+                    src={piece.photo_url}
+                    alt={piece.name}
+                    className="w-20 h-20 object-cover rounded-xl border border-ah-gray/50 dark:border-[#2a3650] flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-xl bg-gray-100 dark:bg-[#0f1a2e] border border-ah-gray/50 dark:border-[#2a3650] flex items-center justify-center text-3xl flex-shrink-0">
+                    📦
                   </div>
-                  <StatusBadge status={piece.status} />
-                </div>
-                <div className="flex items-center gap-3 mt-2">
-                  {piece.type && (
-                    <span className="text-sm text-ah-charcoal/60 dark:text-[#a0b4d0]">{piece.type}</span>
-                  )}
-                  {piece.estimated_value_usd && (
-                    <span className="text-sm font-semibold text-ah-navy dark:text-[#edf3ff]">
-                      {formatCurrency(piece.estimated_value_usd)}
+                )}
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-lg font-bold text-ah-navy dark:text-[#edf3ff] truncate">{piece.name}</p>
+                      <p className="text-sm text-ah-charcoal/60 dark:text-[#a0b4d0]">{piece.type}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className={`text-sm font-semibold ${avail > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                      {avail}/{total} disponibles
                     </span>
-                  )}
+                    {piece.location && (
+                      <span className="text-sm text-ah-charcoal/50 dark:text-[#7a8eaa]">{piece.location}</span>
+                    )}
+                  </div>
+                  {/* Quick usage buttons */}
+                  <div className="flex items-center gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => onUpdateUsage(piece, -1)}
+                      disabled={piece.in_use <= 0}
+                      className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold text-base flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="Liberar uno"
+                    >
+                      −
+                    </button>
+                    <span className="text-sm font-medium text-ah-charcoal dark:text-[#d0daf0] min-w-[60px] text-center">
+                      {piece.in_use || 0} en uso
+                    </span>
+                    <button
+                      onClick={() => onUpdateUsage(piece, 1)}
+                      disabled={piece.in_use >= piece.quantity}
+                      className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 font-bold text-base flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="Marcar en uso"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Desktop: Table Layout */}
@@ -166,14 +170,7 @@ export default function InventoryTable({ pieces, loading, onPieceClick }) {
           <thead>
             <tr className="bg-ah-navy dark:bg-[#0f1a2e] text-white">
               <th className="px-4 py-4 text-base font-semibold rounded-tl-2xl whitespace-nowrap">
-                <button onClick={() => handleSort('code')} className="flex items-center hover:text-ah-gray transition-colors">
-                  Foto
-                </button>
-              </th>
-              <th className="px-4 py-4 text-base font-semibold whitespace-nowrap">
-                <button onClick={() => handleSort('code')} className="flex items-center hover:text-ah-gray transition-colors">
-                  Código <SortIcon column="code" />
-                </button>
+                Foto
               </th>
               <th className="px-4 py-4 text-base font-semibold whitespace-nowrap">
                 <button onClick={() => handleSort('name')} className="flex items-center hover:text-ah-gray transition-colors">
@@ -185,61 +182,94 @@ export default function InventoryTable({ pieces, loading, onPieceClick }) {
                   Tipo <SortIcon column="type" />
                 </button>
               </th>
-              <th className="px-4 py-4 text-base font-semibold whitespace-nowrap hidden lg:table-cell">
-                <button onClick={() => handleSort('estimated_value_usd')} className="flex items-center hover:text-ah-gray transition-colors">
-                  Valor USD <SortIcon column="estimated_value_usd" />
+              <th className="px-4 py-4 text-base font-semibold whitespace-nowrap">
+                <button onClick={() => handleSort('quantity')} className="flex items-center hover:text-ah-gray transition-colors">
+                  Cantidad <SortIcon column="quantity" />
                 </button>
               </th>
-              <th className="px-4 py-4 text-base font-semibold rounded-tr-2xl whitespace-nowrap">
-                <button onClick={() => handleSort('status')} className="flex items-center hover:text-ah-gray transition-colors">
-                  Estado <SortIcon column="status" />
+              <th className="px-4 py-4 text-base font-semibold whitespace-nowrap">
+                <button onClick={() => handleSort('available')} className="flex items-center hover:text-ah-gray transition-colors">
+                  Disponible <SortIcon column="available" />
                 </button>
+              </th>
+              <th className="px-4 py-4 text-base font-semibold whitespace-nowrap hidden lg:table-cell">
+                Ubicación
+              </th>
+              <th className="px-4 py-4 text-base font-semibold rounded-tr-2xl whitespace-nowrap text-center">
+                Uso
               </th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map((piece, idx) => (
-              <tr
-                key={piece.id}
-                onClick={() => onPieceClick(piece)}
-                className={`table-row-hover cursor-pointer border-b border-ah-gray/30 dark:border-[#2a3650]/60 ${
-                  idx % 2 === 0
-                    ? 'bg-white dark:bg-[#1a2236]'
-                    : 'bg-gray-50/50 dark:bg-[#162030]'
-                }`}
-              >
-                <td className="px-4 py-3">
-                  {piece.photo_url ? (
-                    <img
-                      src={piece.photo_url}
-                      alt={piece.name}
-                      className="w-14 h-14 object-cover rounded-lg border border-ah-gray/50 dark:border-[#2a3650]"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-[#0f1a2e] border border-ah-gray/50 dark:border-[#2a3650] flex items-center justify-center text-2xl">
-                      🖼️
+            {sorted.map((piece, idx) => {
+              const avail = Math.max(0, (piece.quantity || 0) - (piece.in_use || 0));
+              const total = piece.quantity || 0;
+              return (
+                <tr
+                  key={piece.id}
+                  onClick={() => onPieceClick(piece)}
+                  className={`table-row-hover cursor-pointer border-b border-ah-gray/30 dark:border-[#2a3650]/60 ${
+                    idx % 2 === 0
+                      ? 'bg-white dark:bg-[#1a2236]'
+                      : 'bg-gray-50/50 dark:bg-[#162030]'
+                  }`}
+                >
+                  <td className="px-4 py-3">
+                    {piece.photo_url ? (
+                      <img
+                        src={piece.photo_url}
+                        alt={piece.name}
+                        className="w-14 h-14 object-cover rounded-lg border border-ah-gray/50 dark:border-[#2a3650]"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-[#0f1a2e] border border-ah-gray/50 dark:border-[#2a3650] flex items-center justify-center text-2xl">
+                        📦
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-lg font-semibold text-ah-navy dark:text-[#edf3ff]">{piece.name}</span>
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    <span className="text-base text-ah-charcoal/70 dark:text-[#a0b4d0]">{piece.type}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-lg font-medium text-ah-navy dark:text-[#edf3ff]">{total}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-lg font-semibold ${avail > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                      {avail}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 hidden lg:table-cell">
+                    <span className="text-base text-ah-charcoal/70 dark:text-[#a0b4d0]">{piece.location || '—'}</span>
+                  </td>
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => onUpdateUsage(piece, -1)}
+                        disabled={piece.in_use <= 0}
+                        className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold text-base flex items-center justify-center hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Liberar uno"
+                      >
+                        −
+                      </button>
+                      <span className="text-sm font-medium text-ah-charcoal dark:text-[#d0daf0] min-w-[24px] text-center">
+                        {piece.in_use || 0}
+                      </span>
+                      <button
+                        onClick={() => onUpdateUsage(piece, 1)}
+                        disabled={piece.in_use >= piece.quantity}
+                        className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 font-bold text-base flex items-center justify-center hover:bg-orange-200 dark:hover:bg-orange-900/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Marcar en uso"
+                      >
+                        +
+                      </button>
                     </div>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-lg font-semibold text-ah-navy dark:text-[#edf3ff]">{piece.code}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-lg text-ah-charcoal dark:text-[#d0daf0]">{piece.name}</span>
-                </td>
-                <td className="px-4 py-3 hidden md:table-cell">
-                  <span className="text-base text-ah-charcoal/70 dark:text-[#a0b4d0]">{piece.type}</span>
-                </td>
-                <td className="px-4 py-3 hidden lg:table-cell">
-                  <span className="text-lg font-medium text-ah-navy dark:text-[#edf3ff]">
-                    {formatCurrency(piece.estimated_value_usd)}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={piece.status} />
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

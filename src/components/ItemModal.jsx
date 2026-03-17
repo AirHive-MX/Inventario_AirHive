@@ -3,68 +3,39 @@
 import { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 
-const PIECE_TYPES = [
-  'Pintura',
-  'Escultura',
-  'Libro',
-  'Cuadro',
-  'Fósil',
-  'Cerámica',
-  'Textil',
-  'Manuscrito',
-  'Joyería',
-  'Arma',
-  'Moneda',
-  'Mueble',
-  'Instrumento Musical',
-  'Mapa',
-  'Grabado',
-  'Fotografía',
-  'Relieve',
-  'Máscara',
-  'Documento',
-  'Tapiz',
-  'Vitral',
-  'Otro',
-];
-
-const CONDITIONS = [
-  'Excelente',
-  'Buena',
-  'Regular',
-  'Deteriorada',
-  'En restauración',
+const ITEM_TYPES = [
+  'Flight Controller',
+  'Batería',
+  'ESC',
+  'Hélice',
+  'Motor',
+  'Cámara',
+  'Telemetría',
+  'RC',
+  'Frame',
+  'GPS',
+  'Sensores',
+  'Módulo de escaneo',
+  'RFID',
+  'Cargadores',
+  'Cableado',
+  'Tornillería',
+  'Materia Prima',
+  'Otros',
 ];
 
 const EMPTY_FORM = {
-  code: '',
   name: '',
   type: '',
   description: '',
-  year_period: '',
-  origin_place: '',
-  civilization: '',
-  artist: '',
-  technique: '',
-  material: '',
-  dimensions: '',
-  weight: '',
-  condition: '',
-  estimated_value_usd: '',
-  status: 'inventario',
-  loaned_to: '',
-  loan_date: '',
-  loan_return_date: '',
-  sold_to: '',
-  sale_date: '',
-  sale_price: '',
-  acquisition_date: '',
-  acquisition_source: '',
-  location_in_warehouse: '',
+  quantity: '',
+  in_use: '',
+  part_number: '',
+  supplier: '',
+  location: '',
   notes: '',
 };
 
-// Defined OUTSIDE the component so they keep stable references across renders
 function InputField({ label, field, type = 'text', placeholder = '', required = false, value, error, onChange }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -76,6 +47,7 @@ function InputField({ label, field, type = 'text', placeholder = '', required = 
         value={value}
         onChange={(e) => onChange(field, e.target.value)}
         placeholder={placeholder}
+        min={type === 'number' ? '0' : undefined}
         className={`h-14 px-4 text-lg rounded-xl border-2 ${
           error ? 'border-red-400' : 'border-ah-gray dark:border-[#2a3650]'
         } bg-white dark:bg-[#162030] text-ah-charcoal dark:text-[#edf3ff] placeholder-gray-400 dark:placeholder-[#5a6e8a] transition-colors duration-300`}
@@ -108,7 +80,7 @@ function SelectField({ label, field, options, required = false, value, error, on
   );
 }
 
-export default function PieceModal({ piece, onSave, onClose, saving }) {
+export default function ItemModal({ piece, onSave, onClose, saving }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [croppedBlob, setCroppedBlob] = useState(null);
@@ -167,9 +139,11 @@ export default function PieceModal({ piece, onSave, onClose, saving }) {
 
   const validate = () => {
     const errs = {};
-    if (!form.code.trim()) errs.code = 'El código es obligatorio';
     if (!form.name.trim()) errs.name = 'El nombre es obligatorio';
     if (!form.type) errs.type = 'Seleccione un tipo';
+    const qty = Number(form.quantity) || 0;
+    const use = Number(form.in_use) || 0;
+    if (use > qty) errs.in_use = 'En uso no puede ser mayor que la cantidad';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -178,16 +152,16 @@ export default function PieceModal({ piece, onSave, onClose, saving }) {
     if (!validate()) return;
 
     const data = { ...form };
-    data.estimated_value_usd = data.estimated_value_usd ? Number(data.estimated_value_usd) : null;
-    data.sale_price = data.sale_price ? Number(data.sale_price) : null;
-    data.loan_date = data.loan_date || null;
-    data.loan_return_date = data.loan_return_date || null;
-    data.sale_date = data.sale_date || null;
-    data.acquisition_date = data.acquisition_date || null;
+    data.quantity = data.quantity ? Number(data.quantity) : 0;
+    data.in_use = data.in_use ? Number(data.in_use) : 0;
 
     Object.keys(data).forEach((key) => {
       if (data[key] === '') data[key] = null;
     });
+
+    // Ensure numbers stay as numbers after null cleanup
+    if (data.quantity === null) data.quantity = 0;
+    if (data.in_use === null) data.in_use = 0;
 
     onSave(data, croppedBlob);
   };
@@ -204,7 +178,7 @@ export default function PieceModal({ piece, onSave, onClose, saving }) {
           {/* Header */}
           <div className="sticky top-0 z-10 bg-white dark:bg-[#121e32] border-b border-ah-gray/50 dark:border-[#2a3650] sm:rounded-t-3xl px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between transition-colors duration-300">
             <h2 className="text-2xl sm:text-3xl font-bold text-ah-navy dark:text-[#edf3ff]">
-              {isEditing ? 'Editar Pieza' : 'Agregar Nueva Pieza'}
+              {isEditing ? 'Editar Artículo' : 'Agregar Nuevo Artículo'}
             </h2>
             <button
               onClick={onClose}
@@ -218,7 +192,7 @@ export default function PieceModal({ piece, onSave, onClose, saving }) {
             {/* Foto */}
             <section>
               <h3 className="text-xl font-bold text-ah-navy dark:text-[#edf3ff] mb-4 pb-2 border-b border-ah-blue/20 dark:border-ah-blue/30">
-                📷 Fotografía
+                Fotografía
               </h3>
               <div className="flex flex-col items-center gap-4">
                 {photoPreview ? (
@@ -240,7 +214,7 @@ export default function PieceModal({ piece, onSave, onClose, saving }) {
                   </div>
                 ) : (
                   <div className="w-64 h-48 rounded-2xl border-2 border-dashed border-ah-gray dark:border-[#3a4e6a] flex flex-col items-center justify-center text-ah-charcoal/40 dark:text-[#5a6e8a]">
-                    <span className="text-5xl mb-2">📷</span>
+                    <span className="text-5xl mb-2">📦</span>
                     <span className="text-base">Sin foto</span>
                   </div>
                 )}
@@ -264,21 +238,21 @@ export default function PieceModal({ piece, onSave, onClose, saving }) {
             {/* Información Básica */}
             <section>
               <h3 className="text-xl font-bold text-ah-navy dark:text-[#edf3ff] mb-4 pb-2 border-b border-ah-blue/20 dark:border-ah-blue/30">
-                📋 Información Básica
+                Información Básica
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputField label="Código" field="code" placeholder="Ej: ART-001" required value={form.code} error={errors.code} onChange={handleChange} />
-                <SelectField label="Tipo de Pieza" field="type" options={PIECE_TYPES} required value={form.type} error={errors.type} onChange={handleChange} />
                 <div className="sm:col-span-2">
-                  <InputField label="Nombre de la Pieza" field="name" placeholder="Ej: Vasija Maya del Período Clásico" required value={form.name} error={errors.name} onChange={handleChange} />
+                  <InputField label="Nombre del Artículo" field="name" placeholder="Ej: Módulo Bluetooth HC-05" required value={form.name} error={errors.name} onChange={handleChange} />
                 </div>
+                <SelectField label="Tipo" field="type" options={ITEM_TYPES} required value={form.type} error={errors.type} onChange={handleChange} />
+                <InputField label="Número de Parte / Modelo" field="part_number" placeholder="Ej: PIXHAWK-V6X" value={form.part_number} error={errors.part_number} onChange={handleChange} />
                 <div className="sm:col-span-2">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-base font-semibold text-ah-navy dark:text-[#d0daf0]">Descripción</label>
                     <textarea
                       value={form.description}
                       onChange={(e) => handleChange('description', e.target.value)}
-                      placeholder="Descripción detallada de la pieza..."
+                      placeholder="Descripción del artículo..."
                       rows={3}
                       className="px-4 py-3 text-lg rounded-xl border-2 border-ah-gray dark:border-[#2a3650] bg-white dark:bg-[#162030] text-ah-charcoal dark:text-[#edf3ff] placeholder-gray-400 dark:placeholder-[#5a6e8a] resize-y transition-colors duration-300"
                     />
@@ -287,83 +261,44 @@ export default function PieceModal({ piece, onSave, onClose, saving }) {
               </div>
             </section>
 
-            {/* Contexto Histórico */}
+            {/* Inventario */}
             <section>
               <h3 className="text-xl font-bold text-ah-navy dark:text-[#edf3ff] mb-4 pb-2 border-b border-ah-blue/20 dark:border-ah-blue/30">
-                🏛️ Contexto Histórico
+                Inventario
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputField label="Año / Período" field="year_period" placeholder="Ej: 1500 a.C. o Siglo XVIII" value={form.year_period} error={errors.year_period} onChange={handleChange} />
-                <InputField label="Lugar de Origen" field="origin_place" placeholder="Ej: Oaxaca, México" value={form.origin_place} error={errors.origin_place} onChange={handleChange} />
-                <InputField label="Civilización / Cultura" field="civilization" placeholder="Ej: Maya, Azteca, Renacentista" value={form.civilization} error={errors.civilization} onChange={handleChange} />
-                <InputField label="Artista / Creador" field="artist" placeholder="Ej: Anónimo o nombre del artista" value={form.artist} error={errors.artist} onChange={handleChange} />
+                <InputField label="Cantidad Total" field="quantity" type="number" placeholder="Ej: 10" value={form.quantity} error={errors.quantity} onChange={handleChange} />
+                <InputField label="En Uso" field="in_use" type="number" placeholder="Ej: 3" value={form.in_use} error={errors.in_use} onChange={handleChange} />
               </div>
-            </section>
-
-            {/* Descripción Física */}
-            <section>
-              <h3 className="text-xl font-bold text-ah-navy dark:text-[#edf3ff] mb-4 pb-2 border-b border-ah-blue/20 dark:border-ah-blue/30">
-                📐 Descripción Física
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputField label="Técnica" field="technique" placeholder="Ej: Óleo sobre lienzo, Talla en piedra" value={form.technique} error={errors.technique} onChange={handleChange} />
-                <InputField label="Material" field="material" placeholder="Ej: Madera, Piedra, Óleo" value={form.material} error={errors.material} onChange={handleChange} />
-                <InputField label="Dimensiones" field="dimensions" placeholder="Ej: 30cm × 50cm × 10cm" value={form.dimensions} error={errors.dimensions} onChange={handleChange} />
-                <InputField label="Peso" field="weight" placeholder="Ej: 2.5 kg" value={form.weight} error={errors.weight} onChange={handleChange} />
-                <SelectField label="Estado de Conservación" field="condition" options={CONDITIONS} value={form.condition} error={errors.condition} onChange={handleChange} />
-              </div>
-            </section>
-
-            {/* Valor y Estado */}
-            <section>
-              <h3 className="text-xl font-bold text-ah-navy dark:text-[#edf3ff] mb-4 pb-2 border-b border-ah-blue/20 dark:border-ah-blue/30">
-                💰 Valor y Estado
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputField label="Valor Estimado (USD)" field="estimated_value_usd" type="number" placeholder="Ej: 5000" value={form.estimated_value_usd} error={errors.estimated_value_usd} onChange={handleChange} />
-                <SelectField label="Estado" field="status" options={['inventario', 'prestado', 'vendido']} value={form.status} error={errors.status} onChange={handleChange} />
-              </div>
-
-              {form.status === 'prestado' && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/15 rounded-xl border border-yellow-200 dark:border-yellow-800/30">
-                  <InputField label="Prestado a" field="loaned_to" placeholder="Nombre o institución" value={form.loaned_to} error={errors.loaned_to} onChange={handleChange} />
-                  <InputField label="Fecha de Préstamo" field="loan_date" type="date" value={form.loan_date} error={errors.loan_date} onChange={handleChange} />
-                  <InputField label="Fecha de Devolución" field="loan_return_date" type="date" value={form.loan_return_date} error={errors.loan_return_date} onChange={handleChange} />
-                </div>
-              )}
-
-              {form.status === 'vendido' && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 p-4 bg-red-50 dark:bg-red-900/15 rounded-xl border border-red-200 dark:border-red-800/30">
-                  <InputField label="Vendido a" field="sold_to" placeholder="Nombre del comprador" value={form.sold_to} error={errors.sold_to} onChange={handleChange} />
-                  <InputField label="Fecha de Venta" field="sale_date" type="date" value={form.sale_date} error={errors.sale_date} onChange={handleChange} />
-                  <InputField label="Precio de Venta (USD)" field="sale_price" type="number" placeholder="Ej: 8000" value={form.sale_price} error={errors.sale_price} onChange={handleChange} />
+              {form.quantity && (
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/15 rounded-xl border border-blue-200 dark:border-blue-800/30">
+                  <p className="text-base text-ah-navy dark:text-[#d0daf0]">
+                    Disponibles: <span className="font-bold text-green-600 dark:text-green-400">{Math.max(0, (Number(form.quantity) || 0) - (Number(form.in_use) || 0))}</span> de {Number(form.quantity) || 0}
+                  </p>
                 </div>
               )}
             </section>
 
-            {/* Adquisición */}
+            {/* Detalles */}
             <section>
               <h3 className="text-xl font-bold text-ah-navy dark:text-[#edf3ff] mb-4 pb-2 border-b border-ah-blue/20 dark:border-ah-blue/30">
-                📦 Adquisición y Ubicación
+                Detalles
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputField label="Fecha de Adquisición" field="acquisition_date" type="date" value={form.acquisition_date} error={errors.acquisition_date} onChange={handleChange} />
-                <InputField label="Fuente / Procedencia" field="acquisition_source" placeholder="Ej: Subasta, Donación, Herencia" value={form.acquisition_source} error={errors.acquisition_source} onChange={handleChange} />
-                <div className="sm:col-span-2">
-                  <InputField label="Ubicación en la Bodega" field="location_in_warehouse" placeholder="Ej: Estante A3, Pasillo 2" value={form.location_in_warehouse} error={errors.location_in_warehouse} onChange={handleChange} />
-                </div>
+                <InputField label="Proveedor" field="supplier" placeholder="Ej: DJI, Holybro, Amazon" value={form.supplier} error={errors.supplier} onChange={handleChange} />
+                <InputField label="Ubicación" field="location" placeholder="Ej: Estante A3, Oficina" value={form.location} error={errors.location} onChange={handleChange} />
               </div>
             </section>
 
             {/* Notas */}
             <section>
               <h3 className="text-xl font-bold text-ah-navy dark:text-[#edf3ff] mb-4 pb-2 border-b border-ah-blue/20 dark:border-ah-blue/30">
-                📝 Notas Adicionales
+                Notas Adicionales
               </h3>
               <textarea
                 value={form.notes}
                 onChange={(e) => handleChange('notes', e.target.value)}
-                placeholder="Cualquier información adicional sobre la pieza..."
+                placeholder="Cualquier información adicional..."
                 rows={4}
                 className="w-full px-4 py-3 text-lg rounded-xl border-2 border-ah-gray dark:border-[#2a3650] bg-white dark:bg-[#162030] text-ah-charcoal dark:text-[#edf3ff] placeholder-gray-400 dark:placeholder-[#5a6e8a] resize-y transition-colors duration-300"
               />
@@ -390,7 +325,7 @@ export default function PieceModal({ piece, onSave, onClose, saving }) {
                   Guardando...
                 </>
               ) : (
-                isEditing ? 'Guardar Cambios' : 'Agregar Pieza'
+                isEditing ? 'Guardar Cambios' : 'Agregar Artículo'
               )}
             </button>
           </div>

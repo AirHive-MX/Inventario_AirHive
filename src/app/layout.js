@@ -2,8 +2,8 @@ import './globals.css';
 import ThemeProvider from '@/components/ThemeProvider';
 
 export const metadata = {
-  title: 'Inventario del Claustro',
-  description: 'Sistema de gestión de inventario de piezas de arte',
+  title: 'Inventario Air Hive',
+  description: 'Sistema de gestión de inventario de componentes - Air Hive',
   icons: {
     icon: '/favicon.png',
   },
@@ -18,7 +18,7 @@ export default function RootLayout({ children }) {
             __html: `
               (function() {
                 try {
-                  var theme = localStorage.getItem('claustro_theme');
+                  var theme = localStorage.getItem('airhive_theme');
                   if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                     document.documentElement.classList.add('dark');
                   }

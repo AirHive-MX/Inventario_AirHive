@@ -1,9 +1,12 @@
 'use client';
 
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTheme } from './ThemeProvider';
 
 export default function Header() {
   const { theme, toggleTheme } = useTheme();
+  const pathname = usePathname();
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-[#2A47F6] backdrop-blur-md border-b border-ah-gray/50 dark:border-[#2A47F6] shadow-sm dark:shadow-md dark:shadow-black/20 transition-colors duration-300">
@@ -11,23 +14,44 @@ export default function Header() {
         <div className="flex items-center justify-between h-16 sm:h-20">
           {/* Logo + Title */}
           <div className="flex items-center gap-3 sm:gap-12">
-            <img
-              src="/logo.png"
-              alt="Air Hive Logo"
-              className={`h-9 sm:h-12 w-auto ${theme === 'dark' ? 'brightness-0 invert' : ''}`}
-            />
+            <Link href="/">
+              <img
+                src="/logo.png"
+                alt="Air Hive Logo"
+                className={`h-9 sm:h-12 w-auto ${theme === 'dark' ? 'brightness-0 invert' : ''}`}
+              />
+            </Link>
             <div>
-              <h1 className="text-lg sm:text-3xl font-bold text-ah-navy dark:text-white tracking-tight">
-                Inventario del Claustro
-              </h1>
+              <Link href="/">
+                <h1 className="text-lg sm:text-3xl font-bold text-ah-navy dark:text-white tracking-tight">
+                  Inventario Air Hive
+                </h1>
+              </Link>
               <p className="text-sm text-ah-charcoal/50 dark:text-white/70 hidden sm:block">
-                Gestión de piezas de arte
+                Gestión de inventario de componentes
               </p>
             </div>
           </div>
 
-          {/* Right side: theme toggle + user */}
+          {/* Right side: nav + theme toggle */}
           <div className="flex items-center gap-2 sm:gap-5">
+            {/* Activity log link */}
+            <Link
+              href={pathname === '/actividad' ? '/' : '/actividad'}
+              className={`flex items-center gap-2 px-3 sm:px-5 h-10 sm:h-12 rounded-full font-semibold text-sm sm:text-base transition-colors ${
+                pathname === '/actividad'
+                  ? 'bg-white/20 dark:bg-white/20 text-ah-navy dark:text-white border border-ah-gray/50 dark:border-white/30'
+                  : 'bg-gray-100 dark:bg-white/15 text-ah-charcoal dark:text-white hover:bg-gray-200 dark:hover:bg-white/25 border border-transparent dark:border-white/20'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="hidden sm:inline">
+                {pathname === '/actividad' ? 'Inventario' : 'Actividad'}
+              </span>
+            </Link>
+
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
@@ -40,21 +64,6 @@ export default function Header() {
                 className={`w-5 h-5 sm:w-7 sm:h-7 object-contain ${theme === 'dark' ? 'brightness-0 invert' : ''}`}
               />
             </button>
-
-            {/* User avatar + name */}
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:block text-right">
-                <p className="text-sm font-semibold text-ah-navy dark:text-white leading-tight">
-                  Dr. Carlos Alberto Jiménez Ramírez
-                </p>
-              </div>
-              <img
-                src="/doctor.jpeg"
-                alt="Dr. Carlos Alberto Jiménez Ramírez"
-                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover object-top border-2 border-ah-gray/50 dark:border-white/40 shadow-sm"
-                style={{ objectPosition: '50% 20%' }}
-              />
-            </div>
           </div>
         </div>
       </div>

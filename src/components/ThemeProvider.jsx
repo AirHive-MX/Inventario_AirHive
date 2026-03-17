@@ -13,7 +13,7 @@ export default function ThemeProvider({ children }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('claustro_theme');
+    const saved = localStorage.getItem('airhive_theme');
     if (saved === 'dark' || saved === 'light') {
       setTheme(saved);
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -30,7 +30,7 @@ export default function ThemeProvider({ children }) {
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('claustro_theme', theme);
+    localStorage.setItem('airhive_theme', theme);
   }, [theme, mounted]);
 
   const toggleTheme = () => {
