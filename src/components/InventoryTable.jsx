@@ -127,10 +127,13 @@ export default function InventoryTable({ pieces, loading, onPieceClick, onUpdate
                       <p className="text-sm text-ah-charcoal/60 dark:text-[#a0b4d0]">{piece.type}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-2">
+                  <div className="flex items-center gap-3 mt-2 flex-wrap">
                     <span className={`text-sm font-semibold ${avail > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                       {avail}/{total} disponibles
                     </span>
+                    {piece.supplier && (
+                      <span className="text-sm text-ah-charcoal/50 dark:text-[#7a8eaa]">{piece.supplier}</span>
+                    )}
                     {piece.location && (
                       <span className="text-sm text-ah-charcoal/50 dark:text-[#7a8eaa]">{piece.location}</span>
                     )}
@@ -193,6 +196,11 @@ export default function InventoryTable({ pieces, loading, onPieceClick, onUpdate
                 </button>
               </th>
               <th className="px-4 py-4 text-base font-semibold whitespace-nowrap hidden lg:table-cell">
+                <button onClick={() => handleSort('supplier')} className="flex items-center hover:text-ah-gray transition-colors">
+                  Proveedor <SortIcon column="supplier" />
+                </button>
+              </th>
+              <th className="px-4 py-4 text-base font-semibold whitespace-nowrap hidden xl:table-cell">
                 Ubicación
               </th>
               <th className="px-4 py-4 text-base font-semibold rounded-tr-2xl whitespace-nowrap text-center">
@@ -242,6 +250,9 @@ export default function InventoryTable({ pieces, loading, onPieceClick, onUpdate
                     </span>
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell">
+                    <span className="text-base text-ah-charcoal/70 dark:text-[#a0b4d0]">{piece.supplier || '—'}</span>
+                  </td>
+                  <td className="px-4 py-3 hidden xl:table-cell">
                     <span className="text-base text-ah-charcoal/70 dark:text-[#a0b4d0]">{piece.location || '—'}</span>
                   </td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
